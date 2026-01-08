@@ -78,6 +78,24 @@ remove_proxy() {
     print_success "Proxy configuration removed. Please restart your terminal for full effect."
 }
 
+# Function to URL encode a string using only bash built-ins
+url_encode() {
+    local string="$1"
+    local strlen=${#string}
+    local encoded=""
+    local pos c o
+
+    for (( pos=0 ; pos<strlen ; pos++ )); do
+        c=${string:$pos:1}
+        case "$c" in
+            [-_.~a-zA-Z0-9] ) o="${c}" ;;
+            * ) printf -v o '%%%02x' "'$c"
+        esac
+        encoded+="${o}"
+    done
+    echo "${encoded}"
+}
+
 # Function to configure proxy
 configure_proxy() {
     local proxy_host=$1
@@ -89,8 +107,8 @@ configure_proxy() {
     local proxy_url
     if [ -n "$proxy_user" ] && [ -n "$proxy_pass" ]; then
         # URL encode username and password
-        proxy_user_encoded=$(echo -n "$proxy_user" | jq -sRr @uri)
-        proxy_pass_encoded=$(echo -n "$proxy_pass" | jq -sRr @uri)
+        proxy_user_encoded=$(url_encode "$proxy_user")
+        proxy_pass_encoded=$(url_encode "$proxy_pass")
         proxy_url="${proxy_user_encoded}:${proxy_pass_encoded}@${proxy_host}:${proxy_port}"
     else
         proxy_url="${proxy_host}:${proxy_port}"
@@ -140,19 +158,6 @@ EOF
     print_warning "For full effect in all applications, please restart your terminal or run: source $PROFILE_SCRIPT"
 }
 
-# Function to check if jq is available (for URL encoding)
-check_dependencies() {
-    if ! command -v jq &> /dev/null; then
-        print_warning "jq is not installed. Installing for URL encoding..."
-        if [ "$EUID" -ne 0 ]; then
-            print_info "Attempting to install jq with sudo..."
-            sudo apt-get update -qq && sudo apt-get install -y jq
-        else
-            apt-get update -qq && apt-get install -y jq
-        fi
-    fi
-}
-
 # Main script
 main() {
     echo ""
@@ -176,9 +181,6 @@ main() {
     if should_use_proxy "$CURRENT_IP"; then
         print_success "IP starts with 172.17 - Proxy configuration required"
         echo ""
-
-        # Check dependencies
-        check_dependencies
 
         # Prompt for proxy details
         read -p "Enter proxy host (e.g., proxy.company.com or IP): " PROXY_HOST
